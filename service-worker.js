@@ -1,4 +1,4 @@
-const CACHE_NAME = 'maps-performance-v1';
+const CACHE_NAME = 'maps-performance-v2';
 const urlsToCache = [
   './',
   './index.html',

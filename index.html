@@ -1405,6 +1405,16 @@ function parseLocalDate(dateString) {
     return new Date(year, month - 1, day);
 }
 
+// Helper function to parse stored workout dates correctly
+// Handles both old buggy data (UTC midnight) and new correct data
+function parseStoredWorkoutDate(isoString) {
+    if (!isoString) return new Date();
+    // Extract just the date portion (YYYY-MM-DD) and parse as local date
+    // This fixes the timezone bug for both old and new data
+    const datePart = isoString.split('T')[0];
+    return parseLocalDate(datePart);
+}
+
 // Format date for display
 function formatDateDisplay(date, options) {
     return date.toLocaleDateString('es-ES', options);
@@ -1863,8 +1873,8 @@ function renderHistory() {
             }
         });
 
-        // Format the date nicely
-        const workoutDate = entry.workoutDate ? new Date(entry.workoutDate) : new Date(entry.timestamp);
+        // Format the date nicely (using helper to fix timezone issues)
+        const workoutDate = entry.workoutDate ? parseStoredWorkoutDate(entry.workoutDate) : new Date(entry.timestamp);
         const formattedDate = workoutDate.toLocaleDateString('es-ES', {
             weekday: 'short',
             day: 'numeric',
@@ -2070,7 +2080,7 @@ function updateChart() {
                 // Get max weight from all sets
                 const maxWeight = Math.max(...ex.sets.map(s => parseFloat(s.weight) || 0));
                 if(maxWeight > 0) {
-                    const workoutDate = new Date(log.workoutDate || log.timestamp);
+                    const workoutDate = log.workoutDate ? parseStoredWorkoutDate(log.workoutDate) : new Date(log.timestamp);
                     exerciseData[ex.name].push({
                         date: workoutDate.toLocaleDateString('es-ES', {day: '2-digit', month: 'short'}),
                         fullDate: workoutDate.toLocaleDateString('es-ES', {weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'}),
