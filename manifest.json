@@ -2,7 +2,7 @@
   "name": "MAPS Performance Tracker",
   "short_name": "MAPS Tracker",
   "description": "Track your MAPS Performance Blueprint workouts",
-  "start_url": "./maps_tracker_ultimate.html",
+  "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#0f0f0f",
   "theme_color": "#4CAF50",

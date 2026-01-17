@@ -1,7 +1,7 @@
 const CACHE_NAME = 'maps-performance-v1';
 const urlsToCache = [
   './',
-  './maps_tracker_ultimate.html',
+  './index.html',
   './manifest.json'
 ];
 
