@@ -1,240 +1,101 @@
-# MAPS Performance Tracker Pro 🔥
+# MAPS Performance Tracker
 
-## Características Principales
+Registro de entrenamientos para el programa **MAPS Performance Blueprint**: es una PWA instalable que funciona sin conexión, no necesita cuentas y guarda tus datos solo en tu dispositivo.
 
-### ✅ Implementadas:
+![Entrenar — móvil](docs/screenshots/mobile-dark-train.png)
 
-1. **📅 Programación Flexible de Fechas**
-   - Programa cada día de entrenamiento según tu horario
-   - Visualiza fechas programadas en los botones de selección
-   - Las sesiones guardadas usan las fechas programadas
+## Qué hace
 
-2. **📊 Gráficas de Progreso con Chart.js**
-   - Tracking automático de ejercicios clave (Squat, Deadlift, Bench Press)
-   - Visualización de progreso de peso a lo largo del tiempo
-   - Se actualiza automáticamente con cada sesión guardada
-   - Responsive y se adapta al tema claro/oscuro
+| Pantalla | Para qué sirve |
+|---|---|
+| **Entrenar** | Muestra la fase activa con su barra 3D y sugiere la siguiente sesión de la rotación con un solo botón para empezar. Incluye la tira de la semana con tus sesiones, la racha y la meta. |
+| **Sesión** | Registra cada set en dos toques: el set anterior aparece como referencia y, al marcar ✓, los campos vacíos toman esos valores y arranca el descanso. Muestra el progreso de los sets y guarda el borrador solo, aunque cierres la app. |
+| **Programa** | Presenta las 4 fases y la movilidad con sus parámetros (tempo, descanso, intensidad). Permite programar fechas y ver las próximas sesiones. |
+| **Historial** | Agrupa las sesiones por mes, con búsqueda por ejercicio o nota y filtro por fase. Cada sesión muestra su detalle por set y se puede eliminar con opción de deshacer. |
+| **Progreso** | Reúne los KPIs (sesiones, meta semanal, racha y volumen de 30 días), la gráfica de 1RM estimado / peso máximo / volumen por ejercicio, el volumen semanal de 12 semanas y los récords personales. Cada gráfica tiene vista de tabla. |
+| **Ajustes** | Permite elegir tema (oscuro, claro o sistema), unidades (kg/lb, con conversión de todo el historial), meta semanal, descanso por fase, sonido y vibración. También exporta a JSON o CSV, importa respaldos (también los de la versión anterior) y borra los datos. |
 
-3. **🌓 Modo Claro/Oscuro**
-   - Toggle en la esquina superior derecha
-   - Se guarda tu preferencia en localStorage
-   - Todos los componentes (incluyendo gráficas) se adaptan
+Otras funciones:
 
-4. **📱 PWA - App Instalable**
-   - Funciona offline (básico)
-   - Instalable en iOS, Android, Windows, Mac
-   - Ícono en pantalla de inicio
-   - Se abre como app nativa
-   - Aparece prompt de instalación automáticamente
+- **Temporizador de descanso preciso:** se basa en marcas de tiempo, así que no se atrasa con la pantalla bloqueada. Tiene botones de +15 y −15 s, cambia de color en los últimos 10 s y avisa con sonido y vibración.
+- **Pantalla siempre encendida** durante la sesión (Wake Lock).
+- **Detección de récords** al guardar, por peso máximo o por 1RM estimado (fórmula de Epley), con resumen y celebración.
+- **Migración automática** de los datos de la versión 1 (`maps_logs`, `workout_schedule` y `theme`). Las claves antiguas se conservan como respaldo.
 
-5. **🎥 Links de Videos de Ejercicios**
-   - Botón "🎥 Ver Demo" en cada ejercicio
-   - Abre video en nueva pestaña
-   - IMPORTANTE: Ver instrucciones de personalización abajo
+## Diseño
 
-## 📝 Cómo Personalizar los Links de Videos
+- **Concepto "acero calibrado".** Cada fase lleva el color de un disco calibrado IPF: Fase I rojo (25 kg), II azul (20 kg), III amarillo (15 kg), IV verde (10 kg) y movilidad en gris tiza. Los neutros son de acero frío y las acciones van en tinta sólida, para que el color solo comunique significado.
+- **Tipografía:** Barlow Condensed para títulos y cifras (estilo marcador de gimnasio) y Barlow para el texto, ambas alojadas en el proyecto (licencia SIL OFL) para que funcionen offline. Las cifras usan números tabulares para que no "bailen" al cambiar 80 por 82.5.
+- **Movimiento con propósito:**
+  - Barra olímpica 3D en CSS que se carga disco por disco y se inclina con el puntero.
+  - Transiciones entre pantallas con View Transitions API.
+  - Tarjetas con inclinación 3D.
+  - Check de set con resorte y onda expansiva.
+  - Gráficas que se dibujan.
+  - Contadores animados.
+  - Todo se desactiva con `prefers-reduced-motion`.
+- **Accesibilidad:**
+  - Cumple WCAG 2.2 AA (verificado con axe en ambos temas).
+  - Objetivos táctiles de 44 px como mínimo.
+  - Navegación completa con teclado, también en las gráficas (←/→/Inicio/Fin).
+  - Etiquetas ARIA en cada input de set.
+  - Tabla equivalente para cada gráfica.
+- **Paleta de datos** validada para daltonismo: una sola serie en azul de disco, con cuadrícula en línea fina.
 
-Los links de videos están en la línea **~42** del archivo HTML. Busca el objeto `exerciseLinks`:
+## Estructura
 
-```javascript
-const exerciseLinks = {
-    // Phase 1
-    "Phase 1 Squat": "TU_LINK_AQUI",
-    "Phase 1 Bench Press": "TU_LINK_AQUI",
-    "High Pull": "TU_LINK_AQUI",
-    // ... más ejercicios
-};
+```
+index.html               shell de la app, sprite de iconos SVG
+manifest.json            manifiesto PWA (íconos PNG + maskable, accesos directos)
+service-worker.js        precache del shell; red primero para HTML, stale-while-revalidate para assets
+assets/css/app.css       sistema de diseño: tokens claro/oscuro, componentes, motion
+assets/js/program.js     definición del programa y links de video  ← edita aquí
+assets/js/core.js        lógica pura: fechas, unidades, migración, estadísticas, récords, import/export
+assets/js/charts.js      gráficas SVG sin dependencias (línea + columnas, tooltip, teclado)
+assets/js/app.js         interfaz: router, vistas, registrador, temporizador, efectos
+assets/fonts/            Barlow / Barlow Condensed (woff2, SIL OFL)
+assets/icons/            icon.svg + PNG generados (npm run icons)
+tests/unit/              pruebas de core.js (node:test)
+tests/e2e/               pruebas de navegador (Playwright + axe-core)
 ```
 
-### Pasos para agregar tus links:
+No necesita build: es HTML, CSS y JavaScript plano. Abre `index.html` directamente o sírvelo con cualquier servidor estático.
 
-1. **Abre el archivo HTML** en un editor de texto (VS Code, Notepad++, etc.)
+## Desarrollo
 
-2. **Busca la sección** `const exerciseLinks = {` (línea ~42)
-
-3. **Reemplaza los URLs** con tus links del MAPS Performance Membership site:
-   ```javascript
-   "Phase 1 Squat": "https://tu-sitio.com/videos/phase1-squat",
-   "Phase 1 Bench Press": "https://tu-sitio.com/videos/phase1-bench",
-   ```
-
-4. **Guarda el archivo** y recarga la página
-
-### Ejemplo de links reales:
-
-Si tus videos están en el membership site de Mind Pump, sería algo como:
-
-```javascript
-const exerciseLinks = {
-    "Phase 1 Squat": "https://members.mindpumpmedia.com/programs/maps-performance/exercises/phase-1-squat",
-    "Phase 1 Bench Press": "https://members.mindpumpmedia.com/programs/maps-performance/exercises/phase-1-bench",
-    // etc...
-};
+```bash
+npm install          # solo para las pruebas (Playwright + axe-core)
+npm start            # http://localhost:5173
+npm test             # pruebas unitarias + e2e
+npm run test:unit    # rápido, sin navegador
+npm run icons        # regenera los PNG desde assets/icons/icon.svg
 ```
 
-### Si no tienes el link de un ejercicio:
+Las pruebas e2e cubren:
 
-Simplemente déjalo con el link genérico o bórralo:
-```javascript
-// Opción 1: Link genérico a la página principal
-"Ejercicio Sin Video": "https://www.mindpumpmedia.com/maps-performance",
+- La migración de datos v1, incluido el bug de zona horaria de las sesiones nocturnas en UTC−6.
+- El registro completo de una sesión, el temporizador y el borrador que sobrevive a una recarga.
+- Movilidad, récords, unidades, export/import, historial y programación de fechas.
+- Accesibilidad con axe en todas las vistas y ambos temas.
+- Que no haya desbordamiento horizontal entre 320 y 1440 px.
+- El funcionamiento offline con el service worker.
 
-// Opción 2: No incluirlo (no aparecerá el botón)
-// Simplemente no lo pongas en la lista
-```
+`SCREENSHOTS=docs/screenshots npm run test:e2e` regenera las capturas.
 
-## 🚀 Cómo Instalar como App (PWA)
+## Personalizar
 
-### En Chrome/Edge (Desktop):
-1. Abre el archivo HTML en el navegador
-2. Verás un botón de instalación en la barra superior o un banner en la página
-3. Click en "Instalar" y listo
+- **Links de video:** edita `exerciseLinks` en `assets/js/program.js`. Si un ejercicio no tiene link, no muestra el botón de demo.
+- **Ejercicios y fases:** se definen en `phases` dentro del mismo archivo. Los nombres de ejercicio son la llave del historial; si renombras uno, sus registros anteriores quedan con el nombre viejo.
+- **Al publicar una nueva versión,** sube `VERSION` en `service-worker.js` para que los usuarios reciban la actualización.
 
-### En iPhone/iPad:
-1. Abre en Safari
-2. Tap en el botón de compartir
-3. Selecciona "Agregar a pantalla de inicio"
-4. Confirma
+## Datos
 
-### En Android:
-1. Abre en Chrome
-2. Tap en el menú (3 puntos)
-3. Selecciona "Agregar a pantalla de inicio" o aparecerá un banner automático
-4. Confirma
+Todo vive en `localStorage` del navegador:
 
-**⚠️ Nota Importante sobre PWA:**
-- Los 4 archivos (HTML, manifest.json, service-worker.js, README) deben estar en la misma carpeta
-- Si abres el HTML directamente (doble-click), el Service Worker puede fallar - esto es normal
-- Para PWA completo con offline: súbelos a un hosting web o usa un servidor local
-- La app funciona perfectamente sin Service Worker, solo no tendrás modo offline
+| Clave | Contenido |
+|---|---|
+| `maps.v2` | sesiones, fechas programadas y ajustes |
+| `maps.v2.draft` | la sesión en curso, sin guardar todavía |
+| `maps_logs`, `workout_schedule`, `theme` | datos de la versión 1, conservados como respaldo |
 
-## 💡 Funcionalidades Extra
-
-### Programación de Fechas:
-- En la sección "📅 Programar Días de Entrenamiento"
-- Selecciona la fecha que planeas hacer cada entrenamiento
-- Click en "Guardar Programación"
-- Las fechas aparecerán en los botones de días
-
-### Temporizador de Descanso:
-- Se activa automáticamente según la fase
-- Phase I/III: 3-5 minutos
-- Phase II: 30-90 segundos
-- Phase IV: Mínimo (circuito)
-- Suena un beep al terminar
-
-### Cargar Sesión Anterior:
-- Al iniciar un entrenamiento, usa "📂 Cargar Última Sesión Similar"
-- Autocompleta con los pesos de tu última sesión del mismo día
-- Útil para tracking progresivo de carga
-
-### Gráficas de Progreso:
-- Automáticamente rastrea: Phase 1 Squat, Deadlift, Bench Press, Front Squat
-- Muestra tu progreso de peso a lo largo del tiempo
-- Se actualiza con cada sesión guardada
-
-## 📂 Archivos Incluidos
-
-- `maps_tracker_ultimate.html` - Aplicación principal
-- `manifest.json` - Configuración PWA (debe estar en la misma carpeta)
-- `service-worker.js` - Service Worker para funcionamiento offline (debe estar en la misma carpeta)
-- `README.md` - Este archivo
-
-**IMPORTANTE:** Los 3 archivos principales (HTML, manifest.json, service-worker.js) DEBEN estar en la misma carpeta para que la PWA funcione correctamente.
-
-## 🔧 Requisitos
-
-- Navegador moderno (Chrome, Firefox, Safari, Edge)
-- JavaScript habilitado
-- Para PWA: HTTPS o localhost (para testing local no hay problema)
-
-## 💾 Datos Guardados
-
-Toda tu información se guarda en el navegador (localStorage):
-- `maps_logs` - Historial de entrenamientos
-- `workout_schedule` - Fechas programadas
-- `theme` - Preferencia de tema claro/oscuro
-
-**IMPORTANTE:** Si borras los datos del navegador, perderás tu historial. Para backup, puedes exportar desde la consola del navegador:
-
-```javascript
-// En la consola del navegador (F12)
-console.log(localStorage.getItem('maps_logs'));
-// Copia el resultado y guárdalo en un archivo de texto
-```
-
-## 🎨 Personalización Adicional
-
-### Cambiar Colores:
-Edita las variables CSS al inicio del archivo (línea ~14):
-
-```css
-:root {
-    --primary: #4CAF50;        /* Verde principal */
-    --accent: #76ff03;         /* Verde acento */
-    --accent-secondary: #00bcd4; /* Cyan para mobility */
-    --orange: #ff9800;         /* Naranja para alertas */
-    /* etc... */
-}
-```
-
-### Agregar más ejercicios al gráfico:
-Busca la línea que dice:
-```javascript
-const keyExercises = ['Phase 1 Squat', 'Phase 1 Deadlift', 'Phase 1 Bench Press', 'Front Squat'];
-```
-
-Agrega los ejercicios que quieras trackear:
-```javascript
-const keyExercises = ['Phase 1 Squat', 'Phase 1 Deadlift', 'Phase 1 Bench Press', 'Front Squat', 'Walking Lunges'];
-```
-
-## 🐛 Solución de Problemas
-
-**La app no se instala:**
-- Asegúrate de que manifest.json Y service-worker.js estén en la misma carpeta que el HTML
-- En producción, necesitas HTTPS (en localhost funciona sin HTTPS)
-- Verifica en DevTools > Application > Service Workers que se registró correctamente
-
-**"Service Worker registration failed":**
-- Los 3 archivos (HTML, manifest.json, service-worker.js) deben estar juntos
-- Si usas un servidor web, asegúrate de que service-worker.js sea accesible
-- En Chrome: F12 > Application > Service Workers para ver detalles del error
-
-**No aparecen las gráficas:**
-- Necesitas al menos una sesión guardada con pesos
-- Los ejercicios deben coincidir con los nombres exactos en keyExercises
-
-**Los videos no abren:**
-- Verifica que los links estén correctos
-- Asegúrate de tener acceso al membership site
-
-**Perdí mis datos:**
-- Revisa que no hayas borrado cookies/localStorage del navegador
-- Los datos solo persisten en el navegador donde los guardaste
-
-## 🎯 Tips de Uso
-
-1. **Programa tus entrenamientos** al inicio de la semana
-2. **Usa el temporizador** para descansos consistentes
-3. **Carga sesión anterior** para ver tu progreso inmediato
-4. **Agrega notas** sobre cómo te sentiste, ajustes, etc.
-5. **Revisa las gráficas** semanalmente para ver tu progreso
-6. **Usa modo claro** durante el día en el gym si hay mucha luz
-7. **Instala como app** para acceso rápido desde tu teléfono
-
-## 📈 Roadmap Futuro (Sugerencias)
-
-- Export/Import de datos (JSON, CSV)
-- Backup automático en la nube
-- Más tipos de gráficas (volumen total, 1RM estimado)
-- Calculadora de 1RM
-- Notificaciones de recordatorio
-- Comparación entre fases
-- Estadísticas avanzadas
-
----
-
-**¡A romperla en el gym! 💪🔥**
-
-Cualquier duda o sugerencia, ajusta el código según necesites. Todo está en un solo archivo HTML para facilidad máxima.
+Si borras los datos del navegador, pierdes el historial. Usa **Ajustes → Exportar respaldo** con regularidad.
