@@ -24,8 +24,8 @@
     const storage = {
         getItem(k) { try { return window.localStorage.getItem(k); } catch (e) { return null; } },
         setItem(k, v) {
-            try { window.localStorage.setItem(k, v); }
-            catch (e) { toast('No se pudo guardar en este dispositivo. Exporta un respaldo desde Ajustes.', { type: 'error' }); }
+            try { window.localStorage.setItem(k, v); return true; }
+            catch (e) { toast('No se pudo guardar en este dispositivo. Libera espacio o exporta un respaldo desde Ajustes.', { type: 'error' }); return false; }
         },
         removeItem(k) { try { window.localStorage.removeItem(k); } catch (e) { /* ignore */ } }
     };
@@ -48,14 +48,34 @@
     };
     let draft = readDraft();
 
-    function persist() { C.saveState(storage, state); }
+    /** Returns false when the browser refused the write (quota, private mode). */
+    function persist() { return C.saveState(storage, state) !== false; }
 
     function readDraft() {
         try {
             const d = JSON.parse(storage.getItem(C.KEYS.draft) || 'null');
-            if (d && P.getDay(d.phase, d.dayId) && Array.isArray(d.exercises)) return d;
+            if (d && P.getDay(d.phase, d.dayId) && Array.isArray(d.exercises)) return reconcileDraft(d);
         } catch (e) { /* ignore */ }
         return null;
+    }
+
+    /** Re-align a stored draft with the current program (exercises may have been edited). */
+    function reconcileDraft(d) {
+        const day = P.getDay(d.phase, d.dayId);
+        const byName = {};
+        d.exercises.forEach((ex) => { if (ex && typeof ex.name === 'string') byName[ex.name] = ex; });
+        d.exercises = day.exercises.map((ex) => {
+            const old = byName[ex.name];
+            const sets = old && Array.isArray(old.sets) ? old.sets.filter((s) => s && typeof s === 'object').map((s) => ({
+                weight: typeof s.weight === 'string' ? s.weight : '', reps: typeof s.reps === 'string' ? s.reps : '', done: !!s.done
+            })) : [];
+            while (sets.length < (ex.sets || 1)) sets.push({ weight: '', reps: '', done: false });
+            return { name: ex.name, done: !!(old && old.done), note: old && typeof old.note === 'string' ? old.note : '', sets: sets };
+        });
+        if (!C.isISODate(d.date)) d.date = C.todayISO();
+        if (d.unit !== 'kg' && d.unit !== 'lb') d.unit = 'kg';
+        if (typeof d.notes !== 'string') d.notes = '';
+        return d;
     }
     let draftTimer = null;
     function saveDraftSoon() {
@@ -369,24 +389,37 @@
         timer.endAt = Date.now() + seconds * 1000;
         timer.pausedLeft = null;
         timer.doneAt = 0;
-        renderTimer(true);
+        renderTimer();
         clearInterval(timer.tick);
         timer.tick = setInterval(updateTimer, 250);
     }
     function adjustRest(delta) {
+        if (timer.doneAt) {
+            // Extending a finished rest restarts the countdown.
+            if (delta <= 0) return;
+            clearTimeout(timer.hideT);
+            timer.doneAt = 0;
+            timer.endAt = Date.now();
+            timer.total = 0;
+            $('#restTimer').classList.remove('is-done');
+            renderTimer();
+            clearInterval(timer.tick);
+            timer.tick = setInterval(updateTimer, 250);
+        }
         if (timer.pausedLeft !== null) timer.pausedLeft = Math.max(0, timer.pausedLeft + delta);
         else timer.endAt = Math.max(Date.now(), timer.endAt + delta * 1000);
         timer.total = Math.max(timer.total + delta, timerLeft(), 1);
         updateTimer();
     }
     function togglePause() {
+        if (timer.doneAt) return;
         if (timer.pausedLeft !== null) {
             timer.endAt = Date.now() + timer.pausedLeft * 1000;
             timer.pausedLeft = null;
         } else {
             timer.pausedLeft = timerLeft();
         }
-        renderTimer(false);
+        renderTimer();
     }
     function stopRest() {
         clearInterval(timer.tick);
@@ -575,7 +608,7 @@
     function defaultPhase() {
         if (ui.phase) return ui.phase;
         const st = C.computeStats(state.sessions, today(), state.settings.weeklyGoal);
-        return st.currentPhase || 'P1';
+        return st.currentPhase && P.getPhase(st.currentPhase) ? st.currentPhase : 'P1';
     }
 
     function weekStrip() {
@@ -917,8 +950,14 @@
             return;
         }
         const records = C.detectNewRecords(state.sessions, record);
+        const before = state.sessions;
         state.sessions = C.sortSessions(state.sessions.concat([record]));
-        persist();
+        if (!persist()) {
+            // Keep the draft so nothing is lost; the storage wrapper already explained why.
+            state.sessions = before;
+            saveDraftNow();
+            return;
+        }
         const phaseId = draft.phase;
         draft = null;
         saveDraftNow();
@@ -931,7 +970,7 @@
     function showSummary(record, records) {
         const sum = C.summarizeSession(record);
         const phase = P.getPhase(record.phase);
-        const mins = draftMinutes(record);
+        const logged = record.exercises.filter(C.exerciseHasData).length;
         const html = '<div class="dialog-body summary phase-' + phase.id + '">' +
             '<div class="summary-plate" aria-hidden="true"></div>' +
             '<h2 class="dialog-title">Sesión guardada</h2>' +
@@ -939,7 +978,7 @@
             '<div class="summary-grid">' +
                 '<div class="summary-stat"><div class="summary-figure" data-count="' + sum.doneSets + '">' + sum.doneSets + '</div><div class="summary-label">Sets</div></div>' +
                 '<div class="summary-stat"><div class="summary-figure" data-count="' + C.round(C.fromKg(sum.volume, unit()), 0) + '" data-format="compact">' + vol(sum.volume) + '</div><div class="summary-label">Vol. ' + unit() + '</div></div>' +
-                '<div class="summary-stat"><div class="summary-figure" data-count="' + (records.length || mins) + '">' + (records.length || mins) + '</div><div class="summary-label">' + (records.length ? 'Récords' : 'Ejercicios') + '</div></div>' +
+                '<div class="summary-stat"><div class="summary-figure" data-count="' + (records.length || logged) + '">' + (records.length || logged) + '</div><div class="summary-label">' + (records.length ? 'Récords' : 'Ejercicios') + '</div></div>' +
             '</div>' +
             (records.length ? '<ul class="summary-prs">' + records.map((r, i) =>
                 '<li class="summary-pr" style="--i:' + i + '">' + icon('trophy') + '<span class="grow"><b>' + esc(r.name) + '</b><br><span class="muted">' +
@@ -950,7 +989,6 @@
         countUp(dlg);
         if (records.length) { celebrate(1.2); beep([660, 880, 1320]); buzz([40, 60, 120]); }
     }
-    function draftMinutes(record) { return record.exercises.filter(C.exerciseHasData).length; }
 
     /* Exercise detail sheet (editorial layer) */
     function showExercise(name) {
@@ -1194,6 +1232,11 @@
             const series = C.exerciseSeries(state.sessions, ui.progressExercise, metric);
             const metricName = { e1rm: '1RM estimado', max: 'Peso máximo', volume: 'Volumen' }[metric];
             const fmtV = (v) => metric === 'volume' ? vol(v) : w(v);
+            if (!series.length) {
+                wrap.innerHTML = '<div class="chart-head"><h2 class="chart-title" id="exChartTitle">' + esc(metricName) + ' · ' + esc(ui.progressExercise) + '</h2></div>' +
+                    '<p class="muted text-sm">Esta métrica necesita peso y repeticiones en el mismo set. Prueba “Peso máx.” o registra tus reps.</p>';
+                return;
+            }
             const last = series[series.length - 1], first = series[0];
             const delta = last && first && series.length > 1 ? last.value - first.value : 0;
             wrap.innerHTML = '<div class="chart-head"><div><h2 class="chart-title" id="exChartTitle">' + esc(metricName) + ' · ' + esc(ui.progressExercise) + '</h2>' +

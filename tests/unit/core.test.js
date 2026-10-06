@@ -227,3 +227,26 @@ test('niceTicks and escaping', () => {
     assert.equal(core.safeUrl('javascript:alert(1)'), null);
     assert.equal(core.safeUrl('https://x.com'), 'https://x.com');
 });
+
+test('records: kg↔lb round-trips are not reported as new records', () => {
+    const a = session('2026-09-01', 'P1', 'D1', [{ name: 'Phase 1 Squat', sets: [{ weight: 60, reps: 5 }] }]);
+    const sameInLb = session('2026-09-08', 'P1', 'D1', [{ name: 'Phase 1 Squat', sets: [{ weight: core.toKg(132.3, 'lb'), reps: 5 }] }]);
+    assert.deepEqual(core.detectNewRecords([a], sameInLb), []);
+    const real = session('2026-09-15', 'P1', 'D1', [{ name: 'Phase 1 Squat', sets: [{ weight: 62.5, reps: 5 }] }]);
+    assert.equal(core.detectNewRecords([a], real)[0].type, 'weight');
+});
+
+test('migration: corrupt data is left untouched when it cannot be parked', () => {
+    const storage = memoryStorage({ 'maps.v2': '{broken' });
+    const refusing = Object.assign({}, storage, { setItem: () => false });
+    const { recovered } = core.loadState(refusing, program);
+    assert.ok(recovered);
+    assert.equal(storage.getItem('maps.v2'), '{broken');
+});
+
+test('metrics: series that need reps are empty when only weight was logged', () => {
+    const s = session('2026-09-01', 'P2', 'D3', [{ name: 'Supinated Pull-Ups', sets: [{ weight: 10, reps: null }] }]);
+    assert.deepEqual(core.weightedExercises([s]), ['Supinated Pull-Ups']);
+    assert.deepEqual(core.exerciseSeries([s], 'Supinated Pull-Ups', 'e1rm'), []);
+    assert.equal(core.exerciseSeries([s], 'Supinated Pull-Ups', 'max').length, 1);
+});

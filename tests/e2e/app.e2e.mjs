@@ -326,6 +326,61 @@ await check('program view: schedule a day and see it upcoming', async () => {
     await context.close();
 });
 
+await check('resilience: stale draft, weight-only sets, unknown phase, timer extension', async () => {
+    const { context, page } = await newPage({
+        init: () => {
+            if (sessionStorage.getItem('seeded')) return;
+            sessionStorage.setItem('seeded', '1');
+            // Draft from an older program layout (exercise order/number changed).
+            localStorage.setItem('maps.v2.draft', JSON.stringify({ phase: 'P1', dayId: 'D1', date: '2026-10-01', unit: 'kg', notes: '',
+                exercises: [{ name: 'High Pull', done: false, note: '', sets: [{ weight: '50', reps: '3', done: true }] }] }));
+            localStorage.setItem('maps.v2', JSON.stringify({ version: 2, schedule: {}, settings: {}, sessions: [
+                { id: 'a', date: '2026-10-01', createdAt: 2, phase: 'P9', dayId: 'X', dayName: 'Importada', exercises: [], notes: '' },
+                { id: 'b', date: '2026-09-30', createdAt: 1, phase: 'P2', dayId: 'D3', dayName: 'Día 3', notes: '',
+                  exercises: [{ name: 'Supinated Pull-Ups', target: '', sets: [{ set: 1, weight: 10, reps: null, done: true }] }] }
+            ] }));
+        }
+    });
+    await page.goto(BASE + '#train');
+    await page.waitForSelector('.hero');
+    await page.goto(BASE + '#session');
+    await page.waitForSelector('.session-title');
+    const highPull = page.locator('.exercise[data-ex="2"] .set-row:not(.is-head)').first();
+    assert.equal(await highPull.locator('[data-field="weight"]').inputValue(), '50', 'draft values follow the exercise name');
+    assert.equal(await page.locator('.exercise').count(), 6);
+
+    // Timer: extend after it finished.
+    await page.evaluate(() => document.querySelector('[data-action="rest-start"]').click());
+    await page.click('[data-action="rest-stop"]');
+    await page.goto(BASE + '#progress');
+    await page.waitForSelector('#exerciseChartWrap');
+    assert.match(await page.textContent('#exerciseChartWrap'), /necesita peso y repeticiones/);
+    assert.deepEqual(page.errors, []);
+    await context.close();
+});
+
+await check('rest timer: +15 after it ends restarts the countdown', async () => {
+    const { context, page } = await newPage();
+    await page.goto(BASE + '#train');
+    await page.click('.hero [data-action="start"]');
+    await page.waitForSelector('.session-title');
+    await page.evaluate(() => {
+        // Shorten the rest so the test doesn't wait minutes.
+        const s = JSON.parse(localStorage.getItem('maps.v2'));
+        s.settings.restOverrides = { P1: 1 };
+        localStorage.setItem('maps.v2', JSON.stringify(s));
+    });
+    await page.reload();
+    await page.waitForSelector('.session-title');
+    await page.locator('.exercise[data-ex="0"] .set-row:not(.is-head) .check').first().click();
+    await page.waitForSelector('#restTimer.is-done', { timeout: 5000 });
+    await page.click('[data-action="rest-adjust"][data-delta="15"]');
+    await page.waitForTimeout(1300);
+    assert.ok(!(await page.isHidden('#restTimer')));
+    assert.match(await page.textContent('.timer-time'), /^0:1[2-4]$/);
+    await context.close();
+});
+
 await check('accessibility: axe WCAG 2.2 AA clean on every view, both themes', async () => {
     for (const colorScheme of ['dark', 'light']) {
         const { context, page } = await newPage({ init: LEGACY_INIT, colorScheme });

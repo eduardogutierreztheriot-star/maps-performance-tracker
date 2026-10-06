@@ -3,7 +3,9 @@
  * - App shell precached at install → the app opens fully offline.
  * - Navigations: network-first (updates arrive on the next visit), cache fallback offline.
  * - Static assets: stale-while-revalidate.
- * Bump VERSION whenever a shipped file changes.
+ * Bump VERSION whenever a shipped file changes, and bump the matching `?v=` on the
+ * CSS/JS URLs in index.html: versioned URLs keep a new HTML from ever running old
+ * cached CSS/JS (and vice versa).
  */
 const VERSION = 'v2.0.0';
 const CACHE = 'maps-performance-' + VERSION;
@@ -11,11 +13,11 @@ const SHELL = [
     './',
     './index.html',
     './manifest.json',
-    './assets/css/app.css',
-    './assets/js/program.js',
-    './assets/js/core.js',
-    './assets/js/charts.js',
-    './assets/js/app.js',
+    './assets/css/app.css?v=2.0.0',
+    './assets/js/program.js?v=2.0.0',
+    './assets/js/core.js?v=2.0.0',
+    './assets/js/charts.js?v=2.0.0',
+    './assets/js/app.js?v=2.0.0',
     './assets/icons/icon.svg',
     './assets/icons/icon-192.png',
     './assets/icons/icon-512.png',
@@ -52,7 +54,10 @@ self.addEventListener('fetch', (event) => {
         event.respondWith(
             fetch(req)
                 .then((res) => {
-                    if (res.ok) {
+                    // Only the app shell itself may refresh the cached index.html.
+                    const scope = new URL(self.registration.scope).pathname;
+                    const isShell = url.pathname === scope || url.pathname === scope + 'index.html';
+                    if (res.ok && isShell && (res.headers.get('content-type') || '').includes('text/html')) {
                         const copy = res.clone();
                         caches.open(CACHE).then((c) => c.put('./index.html', copy));
                     }

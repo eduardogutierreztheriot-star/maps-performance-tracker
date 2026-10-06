@@ -273,9 +273,10 @@
             return { state: hydrate(current.value, program), migrated: false, recovered: false };
         }
         const recovered = !current.ok;
+        let parked = true;
         if (recovered) {
             // Never silently drop unreadable data: park it for manual recovery.
-            try { storage.setItem(KEYS.backup, current.raw); } catch (e) { /* quota */ }
+            try { parked = storage.setItem(KEYS.backup, current.raw) !== false; } catch (e) { parked = false; }
         }
 
         const state = emptyState();
@@ -296,12 +297,14 @@
         const theme = storage.getItem(KEYS.legacyTheme);
         if (theme === 'light' || theme === 'dark') state.settings.theme = theme;
 
-        saveState(storage, state);
+        // If the unreadable data couldn't be copied aside, leave it untouched.
+        if (parked) saveState(storage, state);
         return { state: state, migrated: migrated, recovered: recovered };
     }
 
+    /** Returns whatever storage.setItem returns (false = refused by the app's safe wrapper). */
     function saveState(storage, state) {
-        storage.setItem(KEYS.data, JSON.stringify({
+        return storage.setItem(KEYS.data, JSON.stringify({
             version: SCHEMA_VERSION,
             sessions: state.sessions,
             schedule: state.schedule,
@@ -404,6 +407,9 @@
             .sort(function (a, b) { return b.e1rm - a.e1rm || a.name.localeCompare(b.name); });
     }
 
+    // Weights entered in lb are stored as kg; ignore sub-50 g differences from unit round-trips.
+    const PR_EPSILON_KG = 0.05;
+
     /** PRs that `session` sets relative to `previous` (all other sessions). */
     function detectNewRecords(previous, session) {
         const before = {};
@@ -418,8 +424,8 @@
             });
             const prev = before[ex.name];
             if (!prev || !(best.weight > 0)) return; // first time logging isn't a "record"
-            if (best.weight > prev.weight) out.push({ name: ex.name, type: 'weight', value: best.weight, previous: prev.weight });
-            else if (best.e1rm > prev.e1rm + 1e-9) out.push({ name: ex.name, type: 'e1rm', value: best.e1rm, previous: prev.e1rm });
+            if (best.weight > prev.weight + PR_EPSILON_KG) out.push({ name: ex.name, type: 'weight', value: best.weight, previous: prev.weight });
+            else if (best.e1rm > prev.e1rm + PR_EPSILON_KG) out.push({ name: ex.name, type: 'e1rm', value: best.e1rm, previous: prev.e1rm });
         });
         return out;
     }
