@@ -9,7 +9,8 @@
     "test": "npm run test:unit && npm run test:e2e",
     "test:unit": "node --test tests/unit/*.test.js",
     "test:e2e": "node tests/e2e/app.e2e.mjs",
-    "icons": "node scripts/build-icons.mjs"
+    "icons": "node scripts/build-icons.mjs",
+    "build:standalone": "node scripts/build-standalone.mjs"
   },
   "devDependencies": {
     "axe-core": "4.10.3",

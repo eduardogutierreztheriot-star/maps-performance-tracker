@@ -1335,7 +1335,23 @@
         return html;
     }
 
-    function download(filename, content, type) {
+    /* Inside the claude.ai artifact viewer files go through its `downloads` capability. */
+    let viewerDownloads = null;
+    function viewerSaver() {
+        if (!(window.claude && typeof window.claude.use === 'function')) return Promise.resolve(null);
+        if (!viewerDownloads) viewerDownloads = Promise.resolve(window.claude.use('downloads')).catch(() => null);
+        return viewerDownloads;
+    }
+
+    async function download(filename, content, type) {
+        const saver = await viewerSaver();
+        if (saver) {
+            try { await saver.save({ filename: filename, data: content }); return true; }
+            catch (e) {
+                if (!e || e.code !== 'declined') toast('No se pudo guardar el archivo en esta vista.', { type: 'error' });
+                return false;
+            }
+        }
         try {
             const blob = new Blob([content], { type: type });
             const url = URL.createObjectURL(blob);
@@ -1444,10 +1460,10 @@
             drawProgressCharts();
         },
         'export-json': () => {
-            if (download('maps-respaldo-' + today() + '.json', JSON.stringify(C.exportBackup(state), null, 2), 'application/json')) toast('Respaldo exportado');
+            download('maps-respaldo-' + today() + '.json', JSON.stringify(C.exportBackup(state), null, 2), 'application/json').then((ok) => { if (ok) toast('Respaldo exportado'); });
         },
         'export-csv': () => {
-            if (download('maps-entrenamientos-' + today() + '.csv', '﻿' + C.toCSV(state.sessions, unit(), P), 'text/csv;charset=utf-8')) toast('CSV exportado');
+            download('maps-entrenamientos-' + today() + '.csv', '\uFEFF' + C.toCSV(state.sessions, unit(), P), 'text/csv;charset=utf-8').then((ok) => { if (ok) toast('CSV exportado'); });
         },
         'clear-all': async () => {
             const ok = await confirmDialog('¿Borrar todos tus datos?', 'Se eliminarán ' + plural(state.sessions.length, 'sesión', 'sesiones') + ' y tus fechas programadas de este dispositivo. Exporta un respaldo antes si lo quieres conservar.', 'Borrar todo');
