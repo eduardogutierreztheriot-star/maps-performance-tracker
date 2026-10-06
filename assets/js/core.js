@@ -187,7 +187,7 @@
         let dayId = typeof raw.dayId === 'string' ? raw.dayId : null;
         if (!dayId && program && program.findDayIdByName) dayId = program.findDayIdByName(raw.phase, dayName);
 
-        return {
+        const session = {
             id: typeof raw.id === 'string' && raw.id ? raw.id : createId(createdAt),
             date: date,
             createdAt: createdAt,
@@ -199,6 +199,8 @@
                 : [],
             notes: raw.notes ? String(raw.notes) : ''
         };
+        if (raw.demo === true) session.demo = true;
+        return session;
     }
 
     /** Newest workout first; same-day ties broken by save time. */
@@ -376,15 +378,21 @@
         return Object.keys(byDate).sort().map(function (date) { return { date: date, value: byDate[date] }; });
     }
 
-    /** Exercise names that have at least one weighted set, most-logged first. */
+    /** Exercise names that have at least one weighted set: most-logged first, heaviest breaks ties. */
     function weightedExercises(sessions) {
-        const count = {};
+        const count = {}, heaviest = {};
         sessions.forEach(function (session) {
             session.exercises.forEach(function (ex) {
-                if (ex.sets.some(function (s) { return s.weight > 0; })) count[ex.name] = (count[ex.name] || 0) + 1;
+                const top = Math.max.apply(null, ex.sets.map(function (s) { return s.weight || 0; }).concat([0]));
+                if (top > 0) {
+                    count[ex.name] = (count[ex.name] || 0) + 1;
+                    heaviest[ex.name] = Math.max(heaviest[ex.name] || 0, top);
+                }
             });
         });
-        return Object.keys(count).sort(function (a, b) { return count[b] - count[a] || a.localeCompare(b); });
+        return Object.keys(count).sort(function (a, b) {
+            return count[b] - count[a] || heaviest[b] - heaviest[a] || a.localeCompare(b);
+        });
     }
 
     /** Best weight and best e1RM per exercise. */
@@ -627,6 +635,153 @@
         return rows.map(function (r) { return r.map(csvCell).join(','); }).join('\r\n') + '\r\n';
     }
 
+
+    /* ------------------------------------------------------------------ *
+     * Demo data — a realistic 16-week history to explore the app.
+     * Deterministic for a given (today, seed). Every session has demo: true.
+     * ------------------------------------------------------------------ */
+
+    function mulberry32(seed) {
+        let a = seed >>> 0;
+        return function () {
+            a = (a + 0x6D2B79F5) >>> 0;
+            let t = a;
+            t = Math.imul(t ^ (t >>> 15), t | 1);
+            t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+    }
+
+    // [starting kg, kg added per logged session]; missing → bodyweight / band work.
+    const DEMO_LOADS = {
+        'Phase 1 Squat': [100, 2.5], 'Phase 1 Bench Press': [72.5, 1.25], 'High Pull': [50, 1.25],
+        'Weighted/BW Pull-ups': [10, 1.25], 'Overhead Press (Push Press)': [50, 1.25], 'MAPS Side Chop': [15, 0.5],
+        'Phase 1 Deadlift': [130, 5], 'Walking Lunges': [20, 1], 'Weighted Dips': [15, 1.25],
+        'MAPS Strength Row': [60, 1.25], '1-Arm KB Shoulder Press': [16, 0.5], 'Downward Chop': [8, 0.5],
+        'Front Squat': [80, 2.5], 'Incline Press': [60, 1.25], '1-Arm Cable Row Split Stance': [25, 1],
+        'MAPS Suitcase Carry': [32, 1],
+        'MAPS Matrix Lunges': [10, 0.5], 'Renegade Row to Push Up': [16, 0.5], '1-Arm KB Squat Press': [16, 0.5],
+        'MAPS Rotational Lunge': [12, 0.5], 'Landmine Rotations': [20, 1], 'Phase 2 Squat': [70, 2.5],
+        'KB Single Leg Deadlift': [20, 1], 'MAPS High/Low Press': [16, 0.5], 'Bench Press': [80, 1.25],
+        'Zercher Squat': [60, 2.5], 'Dunphy Squat': [20, 1],
+        'KB Swings': [24, 1], 'Phase III Barbell Squat': [60, 2.5], '1-Arm DB Snatch': [22.5, 1],
+        'MAPS Power Punch': [5, 0.25], 'Deadlift Speed Pulls': [100, 2.5],
+        'Phase IV Barbell Squat': [70, 2.5], 'Double KB Swings': [20, 1], 'Front Loaded Squats': [24, 1],
+        'Rotating Shoulder Press': [12, 0.5]
+    };
+
+    // Week-by-week block plan (oldest first): a full cycle, then a second Phase I block.
+    const DEMO_PLAN = ['P1', 'P1', 'P1', 'P2', 'P2', 'P2', 'P3', 'P3', 'P3', 'P4', 'P4', 'P1', 'P1', 'P1', 'P1', 'P1'];
+    const DEMO_NOTES = [
+        'Buena energía, la barra se movió rápido.',
+        'Dormí poco; bajé un poco la carga en el último set.',
+        'El tempo 5:1:1 se sintió durísimo en la excéntrica.',
+        'Rodilla izquierda rígida al inicio, mejoró con el calentamiento.',
+        'Récord en sentadilla. La próxima semana subo 2.5 kg.',
+        'Descansos de 60 s muy cortos, pero aguanté el ritmo.',
+        'Saltos explosivos, cuidar la recepción.',
+        'Circuito pesado, terminé con buen aire.',
+        'Agarre fallando en el último set de peso muerto.'
+    ];
+
+    function demoReps(target, rnd) {
+        const range = String(target).match(/(\d+)\s*-\s*(\d+)/);
+        if (range) return +range[1] + Math.floor(rnd() * (+range[2] - +range[1] + 1));
+        if (/\d+\s*s\b/.test(target)) return 12 + Math.floor(rnd() * 8); // timed sets → reps achieved
+        if (/min/.test(target)) return null;
+        if (/fallo/.test(target)) return 8 + Math.floor(rnd() * 4);
+        const n = String(target).match(/^\d+/);
+        return n ? +n[0] : null;
+    }
+
+    function roundLoad(kg, base) {
+        const step = base >= 40 ? 2.5 : base >= 10 ? 1 : 0.5;
+        return Math.round(kg / step) * step;
+    }
+
+    /**
+     * Returns { sessions, schedule } — sessions newest first, all dated ≤ today;
+     * schedule holds the next two Phase I days.
+     */
+    function generateDemoData(today, program, seed) {
+        const rnd = mulberry32(seed || 2026);
+        const thisWeek = startOfWeek(today);
+        const firstWeek = addDays(thisWeek, -7 * (DEMO_PLAN.length - 1));
+        const seen = {};
+        const rotation = {};
+        const sessions = [];
+        let n = 0;
+
+        function nextDay(phase) {
+            const i = rotation[phase.id] || 0;
+            rotation[phase.id] = i + 1;
+            return phase.days[i % phase.days.length];
+        }
+
+        function build(date, phase, day) {
+            const exercises = day.exercises.map(function (ex) {
+                if (phase.kind === 'mobility') {
+                    return { name: ex.name, target: ex.reps, sets: [], completed: rnd() > 0.08 };
+                }
+                const load = DEMO_LOADS[ex.name];
+                const count = seen[ex.name] = (seen[ex.name] || 0) + 1;
+                const top = load ? roundLoad(load[0] + load[1] * (count - 1) * (0.85 + rnd() * 0.3), load[0]) : null;
+                const sets = [];
+                for (let s = 1; s <= (ex.sets || 1); s++) {
+                    let reps = demoReps(ex.reps, rnd);
+                    if (reps !== null && s === ex.sets && ex.sets > 2 && rnd() < 0.18) reps = Math.max(1, reps - 1); // grinder on the last set
+                    const weight = top === null ? null : (s === 1 && ex.sets >= 4 ? roundLoad(top * 0.92, load[0]) : top);
+                    sets.push({ set: s, weight: weight, reps: reps, done: true });
+                }
+                return { name: ex.name, target: ex.reps, sets: sets };
+            });
+            const created = parseISODate(date).getTime() + (17 + rnd() * 3) * 3600000;
+            n++;
+            sessions.push(normalizeSession({
+                id: 'demo_' + n,
+                demo: true,
+                date: date,
+                createdAt: Math.round(created),
+                phase: phase.id,
+                dayId: day.id,
+                dayName: day.name,
+                exercises: exercises,
+                notes: rnd() < 0.3 ? DEMO_NOTES[Math.floor(rnd() * DEMO_NOTES.length)] : ''
+            }, program));
+        }
+
+        DEMO_PLAN.forEach(function (phaseId, w) {
+            const weekStart = addDays(firstWeek, 7 * w);
+            const phase = program.getPhase(phaseId);
+            [0, 2, 4].forEach(function (offset) {           // Mon / Wed / Fri
+                const date = addDays(weekStart, offset);
+                if (date > today) return;
+                if (w > 0 && w < DEMO_PLAN.length - 1 && rnd() < 0.07) { nextDay(phase); return; } // a missed day
+                build(date, phase, nextDay(phase));
+            });
+            const mob = program.getPhase('MOB');
+            [1, 5].forEach(function (offset) {              // Tue / Sat mobility, most weeks
+                const date = addDays(weekStart, offset);
+                if (date > today || rnd() < 0.35) return;
+                build(date, mob, nextDay(mob));
+            });
+        });
+
+        // Upcoming: the next two Phase I days on the Mon/Wed/Fri rhythm.
+        const schedule = {};
+        const p1 = program.getPhase('P1');
+        let cursor = addDays(today, 1);
+        for (let k = 0; Object.keys(schedule).length < 2 && k < 14; k++, cursor = addDays(cursor, 1)) {
+            const dow = daysBetween(startOfWeek(cursor), cursor);
+            if (dow === 0 || dow === 2 || dow === 4) {
+                const day = p1.days[(rotation.P1 || 0) % p1.days.length];
+                rotation.P1 = (rotation.P1 || 0) + 1;
+                schedule['P1-' + day.id] = cursor;
+            }
+        }
+        return { sessions: sortSessions(sessions), schedule: schedule };
+    }
+
     /* ------------------------------------------------------------------ *
      * Misc
      * ------------------------------------------------------------------ */
@@ -689,6 +844,7 @@
         parseBackup: parseBackup,
         mergeSessions: mergeSessions,
         toCSV: toCSV,
+        generateDemoData: generateDemoData,
         // misc
         escapeHTML: escapeHTML,
         safeUrl: safeUrl

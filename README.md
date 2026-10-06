@@ -22,6 +22,12 @@ Otras funciones:
 - **Detección de récords** al guardar, por peso máximo o por 1RM estimado (fórmula de Epley), con resumen y celebración.
 - **Migración automática** de los datos de la versión 1 (`maps_logs`, `workout_schedule` y `theme`). Las claves antiguas se conservan como respaldo.
 
+## Datos de ejemplo
+
+Para explorar gráficas, historial y récords sin entrenar primero:
+- **Cargar o quitar:** **Ajustes → Datos de ejemplo → Cargar** genera 16 semanas ficticias (las 4 fases y movilidad, con progresión de cargas, récords, notas y días programados). Cada sesión lleva la etiqueta *Ejemplo* y se quita con un toque sin tocar tus datos reales.
+- **Versión de un solo archivo:** `npm run build:standalone -- --demo` genera el archivo que abre ya con los datos de ejemplo cargados.
+
 ## Diseño
 
 - **Concepto "acero calibrado".** Cada fase lleva el color de un disco calibrado IPF: Fase I rojo (25 kg), II azul (20 kg), III amarillo (15 kg), IV verde (10 kg) y movilidad en gris tiza. Los neutros son de acero frío y las acciones van en tinta sólida, para que el color solo comunique significado.

@@ -2,6 +2,7 @@
 // Useful for sharing a single file or opening it without a server.
 //   node scripts/build-standalone.mjs [output]   (default: dist/maps-performance-tracker.html)
 // Options: --fragment  omit <!doctype>/<html>/<head>/<body> (for hosts that add their own skeleton)
+//          --demo      open with example data when the viewer has none (removable in the app)
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const args = process.argv.slice(2);
 const fragment = args.includes('--fragment');
+const demo = args.includes('--demo');
 const out = resolve(args.find((a) => !a.startsWith('--')) || resolve(root, 'dist/maps-performance-tracker.html'));
 const read = (p) => readFile(resolve(root, p), 'utf8');
 
@@ -23,7 +25,7 @@ const title = html.match(/<title>[\s\S]*?<\/title>/)[0];
 const themeScript = html.match(/<script>\s*\/\* Resolve the theme[\s\S]*?<\/script>/)[0];
 const body = html.match(/<body>([\s\S]*?)<script src=/)[1];
 const icon = 'data:image/svg+xml;base64,' + (await readFile(resolve(root, 'assets/icons/icon.svg'))).toString('base64');
-const safeJs = js.replace(/<\/script/gi, '<\\/script');
+const safeJs = (demo ? 'window.MAPS_AUTODEMO = true;\n' : '') + js.replace(/<\/script/gi, '<\\/script');
 
 const head = `${title}
 <meta name="description" content="Registro de entrenamientos MAPS Performance Blueprint.">

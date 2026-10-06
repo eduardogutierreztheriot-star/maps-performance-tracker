@@ -250,3 +250,23 @@ test('metrics: series that need reps are empty when only weight was logged', () 
     assert.deepEqual(core.exerciseSeries([s], 'Supinated Pull-Ups', 'e1rm'), []);
     assert.equal(core.exerciseSeries([s], 'Supinated Pull-Ups', 'max').length, 1);
 });
+
+test('demo data: deterministic, realistic and marked', () => {
+    const a = core.generateDemoData('2026-10-06', program, 7);
+    const b = core.generateDemoData('2026-10-06', program, 7);
+    assert.deepEqual(a, b, 'same inputs → same data');
+    assert.ok(a.sessions.length > 45);
+    assert.ok(a.sessions.every((s) => s.demo === true && s.date <= '2026-10-06' && program.getDay(s.phase, s.dayId)));
+    assert.deepEqual(new Set(a.sessions.map((s) => s.phase)), new Set(['P1', 'P2', 'P3', 'P4', 'MOB']));
+    assert.deepEqual(core.sortSessions(a.sessions).map((s) => s.id), a.sessions.map((s) => s.id));
+    const squat = core.exerciseSeries(a.sessions, 'Phase 1 Squat', 'max');
+    assert.ok(squat.length >= 6 && squat[squat.length - 1].value > squat[0].value, 'progressive overload');
+    const st = core.computeStats(a.sessions, '2026-10-06', 3);
+    assert.equal(st.currentPhase, 'P1');
+    assert.ok(st.weekStreak >= 10);
+    assert.ok(Object.values(a.schedule).every((d) => d > '2026-10-06'));
+    assert.equal(Object.keys(a.schedule).length, 2);
+    // Survives a JSON round-trip through the normal loader.
+    const storage = memoryStorage({ 'maps.v2': JSON.stringify({ version: 2, sessions: a.sessions, schedule: {}, settings: {} }) });
+    assert.ok(core.loadState(storage, program).state.sessions.every((s) => s.demo));
+});

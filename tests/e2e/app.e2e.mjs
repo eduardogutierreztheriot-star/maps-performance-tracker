@@ -381,6 +381,51 @@ await check('rest timer: +15 after it ends restarts the countdown', async () => 
     await context.close();
 });
 
+await check('example data: load, explore, remove without touching real sessions', async () => {
+    const { context, page } = await newPage({ init: LEGACY_INIT });
+    await page.goto(BASE + '#settings');
+    await page.click('[data-action="load-demo"]');
+    await page.click('#confirmOk'); // there are 2 real sessions → confirmation
+    await page.waitForSelector('.list [data-action="remove-demo"]');
+    const st = await appState(page);
+    const demo = st.sessions.filter((s) => s.demo).length;
+    assert.ok(demo > 45, 'demo sessions loaded');
+    assert.equal(st.sessions.length - demo, 2, 'real sessions untouched');
+    await page.goto(BASE + '#history');
+    await page.waitForSelector('.badge-demo');
+    await axe(page, 'history with example data');
+    await page.goto(BASE + '#progress');
+    await page.waitForSelector('#exerciseChart svg .series-dot');
+    assert.ok(await page.locator('#exerciseChart svg .series-dot').count() >= 6);
+    assert.ok(await page.locator('#volumeChart svg .series-bar').count() >= 12);
+    await axe(page, 'progress with example data');
+    await page.click('.demo-banner [data-action="remove-demo"]');
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem('maps.v2')).sessions.length === 2);
+    assert.ok(await page.isHidden('.demo-banner').catch(() => true));
+    assert.deepEqual(page.errors, []);
+    await context.close();
+});
+
+await check('single-file build opens with example data and works from file://', async () => {
+    const { execFileSync } = await import('node:child_process');
+    const { mkdtempSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const out = mkdtempSync(tmpdir() + '/maps-') + '/app.html';
+    execFileSync(process.execPath, [new URL('../../scripts/build-standalone.mjs', import.meta.url).pathname, out, '--demo']);
+    const { context, page } = await newPage();
+    await page.goto('file://' + out + '#progress');
+    await page.waitForSelector('#exerciseChart svg .series-line');
+    await page.waitForSelector('.demo-banner');
+    await page.goto('file://' + out + '#history');
+    await page.waitForSelector('.badge-demo');
+    // Removing the example data sticks across reloads.
+    await page.click('.demo-banner [data-action="remove-demo"]');
+    await page.reload();
+    await page.waitForSelector('.empty');
+    assert.deepEqual(page.errors, []);
+    await context.close();
+});
+
 await check('accessibility: axe WCAG 2.2 AA clean on every view, both themes', async () => {
     for (const colorScheme of ['dark', 'light']) {
         const { context, page } = await newPage({ init: LEGACY_INIT, colorScheme });

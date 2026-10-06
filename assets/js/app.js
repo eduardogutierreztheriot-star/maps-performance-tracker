@@ -638,7 +638,7 @@
         const st = C.computeStats(state.sessions, today(), state.settings.weeklyGoal);
         const rest = restFor(phaseId);
 
-        let html = '';
+        let html = demoBanner();
         if (draft) {
             const dp = P.getPhase(draft.phase);
             const prog = draftProgress();
@@ -1101,7 +1101,7 @@
     }
 
     function renderHistory() {
-        let html = '<div class="page-head"><div><h1 class="page-title">Historial</h1><p class="page-sub">' + plural(state.sessions.length, 'sesión registrada', 'sesiones registradas') + '</p></div></div>';
+        let html = demoBanner() + '<div class="page-head"><div><h1 class="page-title">Historial</h1><p class="page-sub">' + plural(state.sessions.length, 'sesión registrada', 'sesiones registradas') + '</p></div></div>';
         if (!state.sessions.length) return html + emptyState('history', 'Sin entrenamientos todavía', 'Guarda tu primera sesión y aquí verás cada set, peso y nota.', '#train', 'Empezar a entrenar');
 
         html += '<div class="filters"><div class="search">' + icon('search') +
@@ -1141,7 +1141,7 @@
         let html = '<article class="card log phase-' + esc(s.phase) + '">' +
             '<button class="log-summary" type="button" data-action="toggle-log" data-id="' + esc(s.id) + '" aria-expanded="' + open + '" aria-controls="log-' + esc(s.id) + '">' +
             '<span class="log-date"><span class="dow">' + esc(fmt.dow.format(dt).replace('.', '')) + '</span><span class="dom">' + dt.getDate() + '</span></span>' +
-            '<span class="log-main"><span class="log-title">' + esc(s.dayName || 'Sesión') + ' <span class="badge"><span class="dot phase-dot-' + esc(s.phase) + '"></span>' + esc(ph ? ph.label : s.phase) + '</span></span>' +
+            '<span class="log-main"><span class="log-title">' + esc(s.dayName || 'Sesión') + ' <span class="badge"><span class="dot phase-dot-' + esc(s.phase) + '"></span>' + esc(ph ? ph.label : s.phase) + '</span>' + (s.demo ? '<span class="badge badge-demo">Ejemplo</span>' : '') + '</span>' +
             '<span class="log-stats"><span><b>' + sum.exercises + '</b> ejercicios</span>' +
             (sum.sets ? '<span><b>' + sum.sets + '</b> sets</span>' : '') +
             (sum.volume ? '<span><b>' + esc(vol(sum.volume)) + '</b> ' + unit() + ' vol.</span>' : '') +
@@ -1181,7 +1181,7 @@
      * ------------------------------------------------------------------ */
     function renderProgress() {
         const st = C.computeStats(state.sessions, today(), state.settings.weeklyGoal);
-        let html = '<div class="page-head"><div><h1 class="page-title">Progreso</h1><p class="page-sub">' +
+        let html = demoBanner() + '<div class="page-head"><div><h1 class="page-title">Progreso</h1><p class="page-sub">' +
             (st.programWeek ? 'Semana ' + st.programWeek + ' del programa' : 'Tus números aparecerán después de tu primera sesión') + '</p></div></div>';
 
         const pct = Math.min(1, st.thisWeek / st.weeklyGoal);
@@ -1212,12 +1212,16 @@
             '<details class="table-toggle"><summary>' + icon('chevron-down', 'icon-sm') + 'Ver como tabla</summary><div class="table-wrap" id="volumeTable"></div></details></section>';
 
         const prs = C.personalRecords(state.sessions);
+        const prRow = (p) => '<tr><td class="name"><button type="button" class="link-btn" data-action="exercise-detail" data-name="' + esc(p.name) + '">' + esc(p.name) + '</button></td>' +
+            '<td class="num">' + esc(w(p.weight)) + ' ' + unit() + (p.reps ? ' <span class="muted">× ' + p.reps + '</span>' : '') + '</td>' +
+            '<td class="num">' + esc(w(p.e1rm)) + ' ' + unit() + '</td><td>' + esc(fmtDay(p.date)) + '</td></tr>';
+        const prHead = '<thead><tr><th scope="col">Ejercicio</th><th scope="col" class="num">Mejor peso</th><th scope="col" class="num">1RM est.</th><th scope="col">Fecha</th></tr></thead>';
+        const TOP = 8;
         html += '<section class="section"><div class="section-head"><h2 class="section-title">Récords personales</h2><span class="section-hint">' + plural(prs.length, 'ejercicio', 'ejercicios') + '</span></div>' +
-            '<div class="table-wrap card"><table class="table"><thead><tr><th scope="col">Ejercicio</th><th scope="col" class="num">Mejor peso</th><th scope="col" class="num">1RM est.</th><th scope="col">Fecha</th></tr></thead><tbody>' +
-            prs.map((p) => '<tr><td class="name"><button type="button" class="link-btn" data-action="exercise-detail" data-name="' + esc(p.name) + '">' + esc(p.name) + '</button></td>' +
-                '<td class="num">' + esc(w(p.weight)) + ' ' + unit() + (p.reps ? ' <span class="muted">× ' + p.reps + '</span>' : '') + '</td>' +
-                '<td class="num">' + esc(w(p.e1rm)) + ' ' + unit() + '</td><td>' + esc(fmtDay(p.date)) + '</td></tr>').join('') +
-            '</tbody></table></div></section>';
+            '<div class="table-wrap card"><table class="table">' + prHead + '<tbody>' + prs.slice(0, TOP).map(prRow).join('') + '</tbody></table></div>' +
+            (prs.length > TOP ? '<details class="table-toggle"><summary>' + icon('chevron-down', 'icon-sm') + 'Ver los ' + prs.length + ' ejercicios</summary>' +
+                '<div class="table-wrap card"><table class="table">' + prHead + '<tbody>' + prs.slice(TOP).map(prRow).join('') + '</tbody></table></div></details>' : '') +
+            '</section>';
         return html;
     }
 
@@ -1321,6 +1325,9 @@
         html += '<section class="section"><div class="section-head"><h2 class="section-title">Tus datos</h2><span class="section-hint">' + plural(state.sessions.length, 'sesión', 'sesiones') + '</span></div><div class="list">' +
             '<div class="list-item"><span class="list-icon">' + icon('download') + '</span><div class="list-item-text"><div class="list-item-title">Respaldo completo</div><div class="list-item-sub">Archivo JSON para restaurar en otro dispositivo</div></div><button class="btn btn-secondary btn-sm" type="button" data-action="export-json">Exportar</button></div>' +
             '<div class="list-item"><span class="list-icon">' + icon('file') + '</span><div class="list-item-text"><div class="list-item-title">Hoja de cálculo</div><div class="list-item-sub">CSV con cada set para Excel o Google Sheets</div></div><button class="btn btn-secondary btn-sm" type="button" data-action="export-csv">Exportar CSV</button></div>' +
+            '<div class="list-item"><span class="list-icon">' + icon('layers') + '</span><div class="list-item-text"><div class="list-item-title">Datos de ejemplo</div><div class="list-item-sub">' +
+            (demoCount() ? plural(demoCount(), 'sesión', 'sesiones') + ' de ejemplo cargadas. Quitarlas no toca tus datos reales.' : '16 semanas de entrenamiento ficticio para explorar gráficas e historial') + '</div></div>' +
+            (demoCount() ? '<button class="btn btn-secondary btn-sm" type="button" data-action="remove-demo">Quitar</button>' : '<button class="btn btn-secondary btn-sm" type="button" data-action="load-demo">Cargar</button>') + '</div>' +
             '<div class="list-item"><span class="list-icon">' + icon('upload') + '</span><div class="list-item-text"><div class="list-item-title">Importar respaldo</div><div class="list-item-sub">Combina sin duplicar. Acepta respaldos de la versión anterior</div></div>' +
             '<label class="btn btn-secondary btn-sm" for="importFile">Elegir archivo</label><input class="visually-hidden" type="file" id="importFile" accept="application/json,.json"></div>' +
             '<div class="list-item"><span class="list-icon" style="color:var(--danger)">' + icon('trash') + '</span><div class="list-item-text"><div class="list-item-title">Borrar todo</div><div class="list-item-sub">Elimina historial, fechas y borrador de este dispositivo</div></div><button class="btn btn-danger-ghost btn-sm" type="button" data-action="clear-all">Borrar</button></div>' +
@@ -1393,7 +1400,52 @@
      * ------------------------------------------------------------------ */
     function emptyState(ic, title, text, href, cta) {
         return '<div class="card empty"><span class="empty-icon">' + icon(ic) + '</span><h2 class="empty-title">' + esc(title) + '</h2><p class="empty-text">' + esc(text) + '</p>' +
-            (href ? '<a class="btn btn-primary" href="' + href + '">' + esc(cta) + '</a>' : '') + '</div>';
+            '<div class="row" style="justify-content:center">' +
+            (href ? '<a class="btn btn-primary" href="' + href + '">' + esc(cta) + '</a>' : '') +
+            '<button class="btn btn-secondary" type="button" data-action="load-demo">' + icon('layers') + 'Ver con datos de ejemplo</button></div></div>';
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Example data — marked `demo: true`, removable in one tap
+     * ------------------------------------------------------------------ */
+    const DEMO_KEY = 'maps.v2.demo';
+    function demoMeta() {
+        try { return JSON.parse(storage.getItem(DEMO_KEY) || 'null') || {}; } catch (e) { return {}; }
+    }
+    const demoCount = () => state.sessions.filter((s) => s.demo).length;
+
+    function loadDemo(silent) {
+        const data = C.generateDemoData(today(), P, 2026);
+        const merged = C.mergeSessions(state.sessions.filter((s) => !s.demo), data.sessions);
+        const scheduled = {};
+        Object.keys(data.schedule).forEach((k) => {
+            if (!state.schedule[k]) { state.schedule[k] = data.schedule[k]; scheduled[k] = data.schedule[k]; }
+        });
+        state.sessions = merged.sessions;
+        if (!persist()) return;
+        storage.setItem(DEMO_KEY, JSON.stringify({ schedule: scheduled }));
+        ui.phase = null;
+        ui.progressExercise = null;
+        render({ keepScroll: !!silent });
+        if (!silent) toast('Cargadas ' + plural(data.sessions.length, 'sesión', 'sesiones') + ' de ejemplo (16 semanas)');
+    }
+
+    function removeDemo() {
+        const meta = demoMeta();
+        state.sessions = state.sessions.filter((s) => !s.demo);
+        Object.keys(meta.schedule || {}).forEach((k) => { if (state.schedule[k] === meta.schedule[k]) delete state.schedule[k]; });
+        persist();
+        storage.setItem(DEMO_KEY, JSON.stringify({ dismissed: true }));
+        ui.phase = null;
+        ui.progressExercise = null;
+        render({ keepScroll: true });
+        toast('Datos de ejemplo eliminados', { type: 'info' });
+    }
+
+    function demoBanner() {
+        if (!demoCount()) return '';
+        return '<div class="demo-banner" role="note">' + icon('info') + '<span class="demo-text"><b>Datos de ejemplo</b><span class="demo-sep" aria-hidden="true"> · </span><span class="demo-sub">' + plural(demoCount(), 'sesión ficticia', 'sesiones ficticias') + '. Lo que registres se guarda aparte.</span></span>' +
+            '<button class="btn btn-ghost btn-sm" type="button" data-action="remove-demo">Quitar</button></div>';
     }
 
     /* ------------------------------------------------------------------ *
@@ -1465,6 +1517,15 @@
         'export-csv': () => {
             download('maps-entrenamientos-' + today() + '.csv', '\uFEFF' + C.toCSV(state.sessions, unit(), P), 'text/csv;charset=utf-8').then((ok) => { if (ok) toast('CSV exportado'); });
         },
+        'load-demo': async () => {
+            const real = state.sessions.filter((s) => !s.demo).length;
+            if (real) {
+                const ok = await confirmDialog('¿Agregar datos de ejemplo?', 'Se sumarán sesiones de ejemplo marcadas como tales junto a tus ' + plural(real, 'sesión', 'sesiones') + '. Puedes quitarlas después sin tocar tus datos.', 'Agregar');
+                if (!ok) return;
+            }
+            loadDemo(false);
+        },
+        'remove-demo': () => removeDemo(),
         'clear-all': async () => {
             const ok = await confirmDialog('¿Borrar todos tus datos?', 'Se eliminarán ' + plural(state.sessions.length, 'sesión', 'sesiones') + ' y tus fechas programadas de este dispositivo. Exporta un respaldo antes si lo quieres conservar.', 'Borrar todo');
             if (!ok) return;
@@ -1473,6 +1534,7 @@
             draft = null;
             saveDraftNow();
             [C.KEYS.legacyLogs, C.KEYS.legacySchedule].forEach((k) => storage.removeItem(k));
+            storage.setItem(DEMO_KEY, JSON.stringify({ dismissed: true }));
             persist();
             render({ keepScroll: true });
             toast('Datos eliminados', { type: 'info' });
@@ -1592,6 +1654,13 @@
      * ------------------------------------------------------------------ */
     applyTheme();
     initTilt();
+    // Shared single-file builds open with example data so the app shows its work.
+    if (window.MAPS_AUTODEMO && !state.sessions.length && !draft && !demoMeta().dismissed) {
+        const data = C.generateDemoData(today(), P, 2026);
+        state.sessions = data.sessions;
+        Object.keys(data.schedule).forEach((k) => { if (!state.schedule[k]) state.schedule[k] = data.schedule[k]; });
+        if (persist()) storage.setItem(DEMO_KEY, JSON.stringify({ schedule: data.schedule }));
+    }
     render();
     registerSW();
     if (loaded.migrated) toast('Tus ' + plural(state.sessions.length, 'sesión', 'sesiones') + ' se migraron al nuevo diseño. Nada se perdió.', { duration: 5000 });
